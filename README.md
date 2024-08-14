@@ -24,7 +24,7 @@ This bot is designed to retrieve and display Magic Stones from NFTs in the MMORP
 ### Usage:
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/naustagic/MiR4_NFT_Stones.git
+   git clone https://github.com/naustagic/MiR4_NFT_Magic_Stones.git
    ```
 2. **Install Dependencies:**
    ```bash
