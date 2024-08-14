@@ -2,7 +2,7 @@ import requests
 import json
 import csv
 
-# Solicita o ID_NFT do usuário
+# Solicita o ID_NFT do NFT no xDraco ex: https://xdraco.com/nft/trade/12345 (12345)
 id_nft = input("Por favor, insira o ID_NFT: ")
 
 # Define se deve incluir pedras que começam com "[E] Magic Stone"
