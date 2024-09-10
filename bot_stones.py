@@ -1,16 +1,15 @@
 import discord
 import requests
 import json
-import csv
 import os
 from dotenv import load_dotenv
 from collections import deque
 from typing import Optional
-
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 TOKEN = os.getenv("TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-
 
 intents = discord.Intents.default()
 intents.message_content = True  # Permite ao bot ler o conteúdo das mensagens
@@ -40,7 +39,7 @@ async def process_request(message: discord.Message):
         request_queue.append(message)
         return
 
-    status_message = await message.reply("Por favor, aguarde enquanto o CSV está sendo gerado...")
+    status_message = await message.reply("Por favor, aguarde enquanto o XLSX está sendo gerado...")
 
     try:
         nft_id = message.content.split('/')[-1]
@@ -123,31 +122,38 @@ async def process_request(message: discord.Message):
                             else:
                                 print(f"Falha ao acessar a API para itemUID {itemUID}. Status code: {response.status_code}")
 
-                        output_filename = f"legendary_stones_{nft_id}.json"
-                        with open(output_filename, "w") as json_file:
-                            json.dump(item_details, json_file, indent=4)
+                        # Criar um arquivo XLSX
+                        wb = Workbook()
+                        ws = wb.active
+                        headers = ["Stone Name"] + list({option["optionName"] for item in item_details for option in item["options"]})
+                        ws.append(headers)
 
-                        all_option_names = set()
                         for item in item_details:
-                            for option in item["options"]:
-                                all_option_names.add(option["optionName"])
+                            row = [item["itemName"]]
+                            option_dict = {option["optionName"]: option["optionValue"] for option in item["options"]}
+                            row.extend(option_dict.get(option_name, "") for option_name in headers[1:])  # Ignorando o primeiro item (Stone Name)
+                            ws.append(row)
 
-                        csv_filename = f"legendary_stones_{nft_id}.csv"
-                        with open(csv_filename, "w", newline='') as csv_file:
-                            csv_writer = csv.writer(csv_file)
-                            headers = ["Stone Name"] + list(all_option_names)
-                            csv_writer.writerow(headers)
-                            for item in item_details:
-                                row = [item["itemName"]]
-                                option_dict = {option["optionName"]: option["optionValue"] for option in item["options"]}
-                                row.extend(option_dict.get(option_name, "") for option_name in all_option_names)
-                                csv_writer.writerow(row)
+                        # Formatar células
+                        for row in range(2, len(item_details) + 2):  # Começa da linha 2
+                            for col in range(2, len(headers) + 1):  # Começa da coluna 2
+                                cell_value = ws.cell(row=row, column=col).value
+                                if isinstance(cell_value, str) and cell_value.endswith('%'):
+                                    # Converte a string de porcentagem para número decimal
+                                    percentage_value = float(cell_value[:-1].replace(',', '.')) / 100
+                                    ws.cell(row=row, column=col).value = percentage_value
+                                    ws.cell(row=row, column=col).number_format = '0.0%'  # Formato de porcentagem com uma casa decimal
+                                elif isinstance(cell_value, (int, float)):
+                                    ws.cell(row=row, column=col).number_format = '0'  # Formato numérico sem casas decimais
 
-                        await update_status(status_message, f"Seu arquivo CSV está pronto para download: {csv_filename}")
-                        await message.reply(file=discord.File(csv_filename))
-                        
-                        os.remove(output_filename)
-                        os.remove(csv_filename)
+                        xlsx_filename = f"legendary_stones_{nft_id}.xlsx"
+                        wb.save(xlsx_filename)
+
+                        await update_status(status_message, f"Seu arquivo XLSX está pronto para download: {xlsx_filename}")
+                        await message.reply(file=discord.File(xlsx_filename))
+
+                        # Limpeza de arquivos temporários
+                        os.remove(xlsx_filename)
                     
                     else:
                         await update_status(status_message, "A chave 'data' não foi encontrada na resposta da API de inventário.")
@@ -170,9 +176,10 @@ async def on_message(message):
     if message.channel.id != CHANNEL_ID or message.author == client.user:
         return
 
-    if message.content.startswith('https://www.xdraco.com/nft/trade/'):
-        if len(message.content) == len('https://www.xdraco.com/nft/trade/'):
-            await message.reply("Link inválido. Por favor, envie um link completo no formato Ex: 'https://www.xdraco.com/nft/trade/11111'.")
+    # Verifica se a URL começa com "https://" e contém "xdraco.com/nft/trade/"
+    if message.content.startswith('https://') and 'xdraco.com/nft/trade/' in message.content:
+        if len(message.content.strip()) <= len('https://xdraco.com/nft/trade/'):
+            await message.reply("Link inválido. Por favor, envie um link completo no formato Ex: 'https://xdraco.com/nft/trade/11111'.")
         else:
             await process_request(message)
 
